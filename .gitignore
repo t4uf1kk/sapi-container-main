@@ -1,0 +1,14 @@
+# Node.js
+smart_cow_iot/node_modules/
+smart_cow_iot/build/
+
+# Java / Spring
+sapi_service/target/
+
+# Docker
+*.log
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db

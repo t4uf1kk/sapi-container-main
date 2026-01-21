@@ -1,0 +1,107 @@
+services:
+  # ================= MYSQL =================
+  mysql_db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: smartcow_db
+      MYSQL_ROOT_PASSWORD: admin123#
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - smartcow-net
+
+  # ================= BACKEND (Spring Boot) =================
+  backend:
+    build:
+      context: ./sapi-service
+      dockerfile: Dockerfile
+    container_name: sapi-service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql_db:3306/smartcow_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: admin123#
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,metrics,prometheus
+      MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: true
+      FILE_STORAGE_PATH: /app/data/sensor_data
+    depends_on:
+      - mysql_db
+    volumes:
+      - backend_data:/app/data/sensor_data
+    networks:
+      - smartcow-net
+
+  # ================= FRONTEND (React / Nginx) =================
+  frontend:
+    build:
+      context: ./smart_cow_iot
+      dockerfile: Dockerfile
+    container_name: smart_cow_iot
+    restart: always
+    depends_on:
+      - backend
+    networks:
+      - smartcow-net
+    ports: []  # kosong, karena kita pakai host Nginx, tetap harus array
+
+
+
+  # ================= PROMETHEUS =================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    depends_on:
+      - backend
+    networks:
+      - smartcow-net
+
+  # ================= GRAFANA =================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - smartcow-net
+
+# ================= NETWORKS & VOLUMES =================
+networks:
+  smartcow-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  prometheus_data:
+  grafana_data:
+  backend_data:
