@@ -1,3 +1,14 @@
+# ===== STAGE 1: BUILD =====
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# ===== STAGE 2: SERVE =====
 FROM nginx:alpine
-COPY dist/ /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
